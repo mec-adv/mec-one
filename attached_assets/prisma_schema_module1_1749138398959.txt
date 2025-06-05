@@ -1,0 +1,285 @@
+// Schema Prisma - Módulo 1: Gestão de Usuários e Entidades
+// Sistema MeC ONE - Gestão de Contratos e Processos Jurídicos
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum UserProfile {
+  ADMINISTRATOR  // Administrador: Todas as ações
+  MANAGER       // Gerente: Todas as ações em contratos/processos
+  COORDINATOR   // Coordenador: Todas exceto exclusão no grupo
+  NEGOTIATOR    // Negociador: Leitura/edição/inclusão contratos do grupo
+  LAWYER        // Advogado: Leitura/edição/inclusão processos do grupo
+  CONTROLLER    // Controller: Todas exceto exclusão processos do grupo
+}
+
+enum EntityType {
+  INDIVIDUAL // Pessoa Física
+  COMPANY    // Pessoa Jurídica
+}
+
+enum ContactStatus {
+  ACTIVE    // Ativo
+  PRIMARY   // Contato Principal
+  INACTIVE  // Desativado
+}
+
+enum Permission {
+  VIEW
+  CREATE
+  EDIT
+  DELETE
+  IMPORT
+  EXPORT
+  APPROVE
+}
+
+// ==========================================
+// TABELAS DE USUÁRIOS E AUTENTICAÇÃO
+// ==========================================
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  firstName   String   @map("first_name")
+  lastName    String   @map("last_name")
+  password    String   // Hash da senha
+  profile     UserProfile
+  isActive    Boolean  @default(true) @map("is_active")
+  
+  // Controle de senha temporária
+  temporaryPassword Boolean @default(false) @map("temporary_password")
+  mustChangePassword Boolean @default(true) @map("must_change_password")
+  
+  // Timestamps
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  lastLogin   DateTime? @map("last_login")
+  
+  // Auditoria
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  
+  // Relacionamentos
+  userWorkGroups UserWorkGroup[]
+  auditLogs      AuditLog[]
+  createdUsers   User[] @relation("UserCreator")
+  creator        User?  @relation("UserCreator", fields: [createdBy], references: [id])
+  
+  @@map("users")
+}
+
+model WorkGroup {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  
+  // Timestamps
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // Auditoria
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  
+  // Relacionamentos
+  userWorkGroups UserWorkGroup[]
+  
+  @@map("work_groups")
+}
+
+model UserWorkGroup {
+  id      String @id @default(cuid())
+  userId  String @map("user_id")
+  groupId String @map("group_id")
+  
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relacionamentos
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group WorkGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, groupId])
+  @@map("user_work_groups")
+}
+
+// ==========================================
+// TABELAS DE ENTIDADES
+// ==========================================
+
+model Entity {
+  id       String     @id @default(cuid())
+  type     EntityType
+  
+  // Dados básicos
+  name     String     // Nome ou Razão Social
+  document String     @unique // CPF ou CNPJ
+  
+  // Dados específicos PJ
+  municipalRegistration String? @map("municipal_registration") // Inscrição Municipal
+  stateRegistration     String? @map("state_registration")     // Inscrição Estadual
+  
+  // Status
+  isActive Boolean @default(true) @map("is_active")
+  
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  // Auditoria
+  createdBy String? @map("created_by")
+  updatedBy String? @map("updated_by")
+  
+  // Campo para integração com outros sistemas
+  externalId String? @map("external_id") // Customer ID de outros sistemas
+  
+  // Relacionamentos
+  addresses EntityAddress[]
+  contacts  EntityContact[]
+  
+  @@map("entities")
+}
+
+model EntityAddress {
+  id           String  @id @default(cuid())
+  entityId     String  @map("entity_id")
+  
+  // Dados do endereço
+  street       String  // Logradouro
+  number       String?
+  complement   String?
+  neighborhood String  // Bairro
+  zipCode      String  @map("zip_code") // CEP
+  city         String
+  state        String
+  country      String  @default("Brasil")
+  
+  // Status
+  isActive     Boolean @default(true) @map("is_active")
+  isPrimary    Boolean @default(false) @map("is_primary")
+  
+  // Timestamps
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  
+  // Relacionamentos
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  
+  @@map("entity_addresses")
+}
+
+model EntityContact {
+  id       String        @id @default(cuid())
+  entityId String        @map("entity_id")
+  
+  // Dados do contato
+  name     String?       // Nome da pessoa de contato
+  role     String?       // Cargo/Função
+  phone    String?
+  mobile   String?
+  email    String?
+  
+  // Redes sociais
+  telegram  String?
+  instagram String?
+  facebook  String?
+  linkedin  String?
+  
+  // Status
+  status ContactStatus @default(ACTIVE)
+  
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  // Relacionamentos
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  
+  @@map("entity_contacts")
+}
+
+// ==========================================
+// SISTEMA DE AUDITORIA
+// ==========================================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?  @map("user_id")
+  
+  // Detalhes da ação
+  action    String   // CREATE, UPDATE, DELETE, LOGIN, etc.
+  table     String   // Nome da tabela afetada
+  recordId  String?  @map("record_id") // ID do registro afetado
+  
+  // Dados da mudança
+  oldValues Json?    @map("old_values") // Valores anteriores (UPDATE/DELETE)
+  newValues Json?    @map("new_values") // Novos valores (CREATE/UPDATE)
+  
+  // Metadados
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  
+  // Timestamp
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relacionamentos
+  user User? @relation(fields: [userId], references: [id])
+  
+  @@map("audit_logs")
+}
+
+// ==========================================
+// SESSÕES DE USUÁRIO (para controle de inatividade)
+// ==========================================
+
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  
+  // Controle de sessão
+  isActive  Boolean  @default(true) @map("is_active")
+  expiresAt DateTime @map("expires_at")
+  
+  // Metadados
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  lastUsed  DateTime @default(now()) @map("last_used")
+  
+  @@map("user_sessions")
+}
+
+// ==========================================
+// CONFIGURAÇÕES DE SISTEMA
+// ==========================================
+
+model SystemConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+  
+  // Metadados
+  description String?
+  isActive    Boolean @default(true) @map("is_active")
+  
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@map("system_configs")
+}

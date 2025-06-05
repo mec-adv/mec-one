@@ -1,0 +1,62 @@
+flowchart TD
+    A[Início] --> B{Tipo de Operação}
+    
+    %% Caso de Uso 1: Login do Usuário
+    B -->|Login| C[Usuário insere credenciais]
+    C --> D{Credenciais válidas?}
+    D -->|Sim| E[Autenticação bem-sucedida]
+    E --> F[Acesso ao sistema]
+    F --> Z[Fim]
+    D -->|Não| G[Exibe mensagem de erro]
+    G --> H{Tentar novamente?}
+    H -->|Sim| C
+    H -->|Não| Z
+    
+    %% Caso de Uso 2: Recuperação de Senha
+    B -->|Esqueci a senha| I[Usuário clica em 'Esqueci minha senha']
+    I --> J[Usuário informa email/login]
+    J --> K{Email/login existe?}
+    K -->|Não| L[Exibe mensagem: usuário não encontrado]
+    L --> M{Tentar novamente?}
+    M -->|Sim| J
+    M -->|Não| Z
+    K -->|Sim| N[Gera token de recuperação]
+    N --> O[Envia email com link de recuperação]
+    O --> P[Usuário acessa link do email]
+    P --> Q{Token válido e não expirado?}
+    Q -->|Não| R[Exibe mensagem: link inválido/expirado]
+    R --> Z
+    Q -->|Sim| S[Usuário define nova senha]
+    S --> T[Senha atualizada com sucesso]
+    T --> U[Usuário pode fazer login]
+    U --> Z
+    
+    %% Caso de Uso 3: Cadastro de Usuário pelo Administrador
+    B -->|Cadastrar usuário| V{É administrador?}
+    V -->|Não| W[Acesso negado]
+    W --> Z
+    V -->|Sim| X[Admin acessa tela de cadastro]
+    X --> Y[Admin preenche dados do usuário]
+    Y --> AA[Admin define perfil do usuário]
+    AA --> BB[Admin associa usuário a um grupo]
+    BB --> CC{Dados válidos?}
+    CC -->|Não| DD[Exibe erros de validação]
+    DD --> Y
+    CC -->|Sim| EE[Salva usuário no sistema]
+    EE --> FF[Gera credenciais temporárias]
+    FF --> GG[Envia credenciais por email]
+    GG --> HH[Usuário cadastrado com sucesso]
+    HH --> Z
+    
+    %% Estilos
+    classDef startEnd fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef process fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef decision fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef success fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef error fill:#ffebee,stroke:#c62828,stroke-width:2px
+    
+    class A,Z startEnd
+    class C,E,F,I,J,N,O,P,S,T,U,X,Y,AA,BB,EE,FF,GG,HH process
+    class B,D,H,K,M,Q,V,CC decision
+    class F,T,U,HH success
+    class G,L,R,W,DD error
